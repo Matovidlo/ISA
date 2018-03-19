@@ -1,0 +1,44 @@
+This project is created by Martin Vasko, for further information about project please send email on xvasko12@stud.fit.vutbr.cz.
+
+--------  ABOUT  -----------
+Objective is monitoring computers, servers for accesibillity purposes.
+Respond time is one of the key element of monitoring and in some cases is very important to have fast flow of information from our side to another.
+
+-------- INSTALL -----------
+Installation is easy, just compile source codes on linux with command:
+
+make
+
+Project was created to support older version of gcc4.8 and higher. Testovac is compiled with g++ since all header and source files are written in C++. Testing was performed with vagrant of centos and also on fedora 26 the project was developed.
+
+-------- RUN PROGRAM -------
+Program can be executed with simple command:
+
+./testovac <node>
+
+This result to an ICMP ECHO_REQUEST and ECHO_REPLY exchange from our node to <node>. It is very similar with tool 'ping'.
+
+------- TOOL SUPPORT -------
+This tool support also ipv6, ipv4, UDP datagram exchange or ICMP messages exchange. It is also multithread so you can monitor multiple nodes at once.
+
+For further information about execution of testovac please visit manual:
+
+man -l testovac.1
+
+------- All Files ----------
+Project consists of those files:
+Makefile
+testovac.1
+manual.pdf
+CC:
+ipv6.cc
+parsearg.cc
+service.cc
+testovac.cc
+thread.cc
+HPP:
+ipv6.hpp
+parsearg.hpp
+service.hpp
+testovac.hpp
+thread.hpp

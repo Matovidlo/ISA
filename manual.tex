@@ -1,0 +1,76 @@
+% Martin Vaško xvasko12
+% FIT VUTBR 3.BIT->3.BIB
+% Dokumentacia ISA -> 1.project
+% RTT statistic tool with multithread purposes
+
+\documentclass[11pt,a4paper]{report}
+\usepackage[T1]{fontenc}
+\usepackage[czech]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage{amsmath}
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage[left=2cm,top=2.5cm,text={17cm,24cm}]{geometry}
+\usepackage{nonfloat}
+\usepackage{multicol}
+\usepackage{lipsum}
+
+\newcommand{\myuv}[1]{\quotedblbase #1\textquotedblleft}
+
+\author{Martin Vaško}
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+{\Huge\textsc{Vysoké učení technické v~Brně\\\huge{Fakulta informačních technologií\\}}}
+\vspace{\stretch{0.382}}
+\LARGE
+ISA projekt\\
+\Huge{Meranie stratovosti a RTT}
+\vspace{\stretch{0.618}}
+\end{center}
+{\Large \today \hfill Martin Vaško}
+\end{titlepage}
+\tableofcontents
+
+\chapter{Úvod}
+Projekt sa zameriava na monitorovanie sieťových uzlov paralelne. V prípade straty paketov alebo prekročeniu hodnoty RTT (Round trip time) nad zvolenú hodnotu, vypíše informácie o strate na užívateľský výstup. Každú hodinu sa vypisuje štatistika, a každých \textbf{-t}\pageref{param} minút štatistika o počte stratených paketov(pri kombinácií s \textbf{-r} sa vypisuje aj koľko paketov prekročilo hodnotu RTT).
+
+\section{Round trip time}
+Round trip time alebo obojsmerné oneskorenie je doba, ktorá uplynie od vyslania signálu(paketu) z jednej stanice na druhú až po návrat späť na prvú stanicu. Tento round trip time môžeme zisťovať pomocou voľne dostupného nástroja s názvom \textbf{ping}. Pre zisťovanie týchto časov je potrebné zaistiť časovú známku pre daný dátový segment v pakete. Pre jednoduchosť som zvolil časovú známku o veľkosti 16 bajtov a jedná sa konkrétne o štuktúru \emph{struct timeval}[odkaz].
+
+\section{IPv4 IPv6}
+Táto aplikácia podporuje posielanie packetov pre uzol s IPv4 adresou alebo aj IPv6, podľa typu adresy uzla. Táto diverzita prináša v prípade ICMP správy IPv4 hlavičku ako odpoveď narozdiel od IPv6 ICMP správy. Preto v projekte museli byť zhoľadnené dve verzie spracovávania packetov, IPv4 spracovanie a IPv6 spracovanie.
+\section{ICMP a UDP}
+ICMP správa typu ECHO\_REQUEST\footnotemark je kontrolná správa, ktorá nám zisťuje o uzloch či sú aktívne, v prípade úspechu nám odpovie uzol ICMP správou ECHO\_REPLY v iných prípadoch nám posiela ICMP správy iných typov, pre ktoré nie je potrebné dalšie spracovanie vrámci merania stratovosti alebo zisťovania RTT hodnoty.
+\footnotetext{ICMP RFC https://tools.ietf.org/html/rfc792}
+\subsection{Zloženie ICMP správy}
+ICMP správa sa skladá z typu (ECHO\_REQUEST) kódu 0, čísla vlákna[gettid] a sekvenčného čísla. Za touto hlavičkou nasleduje časová známka, ktorá nám hovorí o čase, v ktorom bola správa vygenerovaná a zasiela sa na daný uzol. Zvyšok dát je náhodne generovaných.
+
+\section{Paralelne spracovanie uzlov}
+Paralelizmus je zaistený pomocou vláken(ang. threads). Týmto spôsobom je implementovaná časť, ktorá spracováva uzol, odosielanie ICMP paketov, čast, v ktorej testovač pôsobí ako \myuv{server} a štatistická časť.
+
+\chapter{Implementácia}
+\section{Parametre}
+\label{param} Testovač obsahuje triedu \emph{Parse\_param}, ktorá obsahuje flagy všetkých možných prepínačov. Ako prvé spracuje všetky tieto prepínače(ak za nimi musí následovať hodnota spracuje sa aj táto hodnota). Zvyšné parametre vstupu by mali byť uzly na spracovanie a odosielanie dát. Zapíšu sa do vektora nespracovaných parametrov po prvom prechode. Potom sa tento vektor vyprázdni a zisťuje sa či daný uzol je uzlom IPv4, IPv6. Ak ani jedna z týchto možností nenastala jedná sa o chybu. Program sa ukončí s \textbf{návratovou hodnotou 1}.
+\section{Schránky a vlákna}
+Hodnoty spracovaných prepínačov prenesieme ako informácie do novej triedy s názvom \emph{Socket\_thread}. Maximálny počet vláken v programe je 16384, pre uzly je možné použiť buď 16380 ak máme komunikáciu ICMP pre komunikáciu UDP 16379, kvôli osobitnému vláknu pre prijímanie a odosielanie UDP datagramov.
+\subsection{Vlákna}
+Pre používanie štandardného výstupu a viac vláknového programovania museli byť zavedené taktiež semafóry aby sa predišlo prepisovaniu výstupu rôznych vláken. Štatistické vlákno jediné prebieha bez toho aby sa čakalo na jeho ukončenie vrámci posielania/prijímania dát z uzlu\footnotemark.
+\footnotetext{Oddelené spracovanie vlákna http://man7.org/linux/man-pages/man3/pthread\_detach.3.html}
+\subsection{Schránky}
+Schránky sú dvojého typu IPv4 a IPv6 podľa typu uzlu. \textbf{Pozor} pre účely použitia ICMP správ (bez prepínača \textbf{-u a -p}) je potrebné použit práva privilegovaného používateľa(príkaz \textbf{sudo} na linuxovej distribucií). Dôvodom je použitie schránok RAW[odkaz raw socket].
+\section{Zaujímavé časti implementácie}
+Schránka je súborový popisovač, kde sa zapisujú a odosielajú dáta. Každý blok prijímania dat je realizovaný pomocou linuxovej funkcie select, ktorá má za úlohu čakať na súborový popisovač, kým nie je možné z neho čítať. UDP datagram musí mať pri špecifikácií veľkosti aspoň 16 bajtovú veľkost, pre ICMP správu je to 24 bajtov. Pri zadaní menších jednotiek je táto hodnota zadaná na najmenšiu možnú napr. pri zadaní 8 bajtov a UDP datagramu program si nastaví hodnotu veľkosti na 16 bajtov.
+\subsection{Implementácia prijímača správ UDP}
+Prijímač správ, ktorý sa špecifikuje parametrom \emph{--l} bol implementovaný cez schránku typu AF\_INET6 kde bola nastavená pokročila možnosť prijímať cez túto schránku IPv4 aj IPv6 komunikáciu súčasne pomocou \textbf{IPV6\_V6ONLY}. Možnosť prijať správu a zistit jej veľkosť bez toho aby sme nenačítavali zbytočné prázdne znaky bolo docielené vo funkcií \textbf{recvfrom}. Položku flags bolo potrebné nastaviť na \textbf{MSG_TRUNC} pre zistenie veľkosti dát a \textbf{MSG_PEEK} pre zachovanie dát na sieťovej karte. Po tomto prijatí sa vyhradilo potrebné miesto v pamäti pre prijatie správy a preposlanie naspäť prijemcovi.
+\section{Ukončenie programu}
+Program beží v nekonečnom cykle a je ho možné prerušiť signálom SIGINT(klávesová skratka na linuxe Ctrl+C). Tento signál vyvolá ukončenie všetkých nekonečných cyklov, zmazanie všetkých dynamicky pridelených tried, uzavretie schránok.
+Úspešne ukončenie programu skončí návratovou hodnotou 0.
+Neúspešné ukončenie programu môže nastať z viacerých rôznych dôvodov. Ukončenie v prípade neinicializovanej schránky hodnotou 2.
+Ukončenie s prepínačom -l pri nenaviazaní schránky hodnotou 3.
+
+
+\chapter{Záver}
+Projekt je funkcionalitou podobný nástroju fping. Má zopár výhod oproti bežným nástrojom napr. je možné nastaviť testovač aj do módu na prijímanie paketov ako server, takže je možné robiť nad ním klasickú UDP prevádzku. Nevýhodou je zasielanie UDP odpovede s rovnakým obsahom, čo na bežnej internetovej prevádzke je neobvyklý jav (každá aplikácia má svoj štandard správ a odpovedí). Keďže dáta sú náhodné a UDP datagram obsahuje 16 bajtovú informáciu o čase, nedokážeme dostať odpoveď od uzlov iba ak na nich beží podobný prijímač ako sa dá špecifikovať prepínačom -l.
+\end{document}
