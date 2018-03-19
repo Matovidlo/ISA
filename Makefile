@@ -27,7 +27,7 @@ $(APP): $(LIBOBJ)
 	$(CC) $(CPPFLAGS) $^ -o $@
 
 clean:
-	$(RM) $(APP) xvasko12.tgz $(LIBOBJ)
+	$(RM) $(APP) xvasko12.tgz $(LIBOBJ) manual.dvi manual.log manual.ps manual.toc
 
 xvasko12.tar: $(wildcard *.cc) $(wildcard *.hpp) Makefile manual.pdf README
 	tar cvf $@ $^
